@@ -18,12 +18,58 @@ led.off()
 ssid = 'MiFibra-D3C0'
 password = 'bjoV2iAp'
 
-html ="""<!DOCTYPE html>
+html ="""
+<!DOCTYPE html>
 <html>
-    <head><title>Robot</title></head>
+    <head>
+        <title>Wally Robot Control</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            body{
+                background: url(./bg.png) repeat fixed;
+            }
+            input{
+                border-radius: 15px;
+                height: 120px;
+                width: 120px;
+            }
+            .grabar{
+                float: left;
+            }
+            .pararGrabacion{
+                float: right;
+            }
+        </style>
+    </head>
     <body>
-        <h1>Aca deberian de estar los controles<h1>
-    <body>
+    <center><b>
+        <form action="./forward">
+        <input type="submit" value="Adelante"/>
+        </form>
+    <table><tr>
+        <td><form action="./left">
+        <input type="submit" value="Izquierda"/>
+        </form></td>
+        <td><form action="./stop">
+        <input type="submit" value="Parar"/>
+        </form></td>
+        <td><form action="./right">
+        <input type="submit" value="Derecha"/>
+        </form></td>
+    </tr></table>
+    <form action="./back">
+    <input type="submit" value="Back"/>
+    </form>
+    </center>
+
+    <form action="./grabar">
+    <input type="submit" value="Grabar" class="grabar"/>
+    </form>
+
+    <form action="./pararGrabacion">
+    <input type="submit" value="Parar Grabacion" class="pararGrabacion"/>
+    </form>
+    </body>
 </html>
 """
 
@@ -44,7 +90,8 @@ def temperature_site(reader, writer):
     writer.write(("Temperatura: {:.3} celcius".format(temperature_celcius)).encode("utf8"))
     
 def invalid_site(reader, writer):
-    response ="""<!DOCTYPE html>
+    response ="""
+<!DOCTYPE html>
 <html>
     <head><title>Error</title></head>
     <body>

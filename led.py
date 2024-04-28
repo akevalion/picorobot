@@ -8,6 +8,6 @@ while True:
     luz.off()
     sleep(val)
     val = val * 0.9
-    if val < 0.05:
+    if val < 0.005:
         val = 1
 print("done")

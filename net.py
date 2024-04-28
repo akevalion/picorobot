@@ -6,20 +6,23 @@ from machine import Pin
 import uasyncio as asyncio
 
 from machine import ADC
+import uos
 
 led = Pin("LED", Pin.OUT)
-led.on()
+led.off()
 
 #ssid = 'Freebox-46C865'
 #password = 'eruatis!5-cogitur@-stimula4-calleantur.7'
-ssid = 'mi 9t akevalion'
-password = 'spigit123'
+#ssid = 'mi 9t akevalion'
+#password = 'spigit123'
+ssid = 'MiFibra-D3C0'
+password = 'bjoV2iAp'
 
 html ="""<!DOCTYPE html>
 <html>
-    <head> <title> Ok </title> </head>
-    <body> <h1> Ok <h1>
-        <p></p>
+    <head><title>Robot</title></head>
+    <body>
+        <h1>Aca deberian de estar los controles<h1>
     <body>
 </html>
 """
@@ -30,17 +33,17 @@ adc = machine.ADC(4)
 def ok(writer):
     writer.write("HTTP/1.0 200 OK\r\n\Content-type: text/html\r\n\r\n")
     
-def defaultSite(reader, writer):
+def default_site(reader, writer):
     ok(writer)
     writer.write(html)
     
 
-def tempSite(reader, writer):
+def temperature_site(reader, writer):
     ADC_voltage = adc.read_u16() * (3.3 / (65536))
     temperature_celcius = 27 - (ADC_voltage - 0.706)/0.001721
-    writer.write(("Temperature: {}°C".format(temperature_celcius)).encode("utf8"))
+    writer.write(("Temperatura: {:.3} celcius".format(temperature_celcius)).encode("utf8"))
     
-def invalidSite(reader, writer):
+def invalid_site(reader, writer):
     response ="""<!DOCTYPE html>
 <html>
     <head><title>Error</title></head>
@@ -52,12 +55,20 @@ def invalidSite(reader, writer):
     writer.write("HTTP/1.0 404 OK\r\n\Content-type: text/html\r\n\r\n")
     writer.write(response)
 
-
+def disk_size_site(reader, writer):
+    res = uos.statvfs('/')
+    total = res[2] * 4096/1024
+    free = res[3] * 4096/1024
+    used = total - free
+    writer.write("Total size: {}kb\r\nFree space: {}kb\r\nUsed space: {}kb".format(total, free, used))
     
+
 sites = {
-    '/' : defaultSite,
-    '/temp': tempSite}
-def connectToNetwork():
+    '/disksize': disk_size_site,
+    '/': default_site,
+    '/temp': temperature_site}
+
+def connect_to_network():
     wlan.active(True)
     wlan.config(pm=0xa11140)
     wlan.connect(ssid, password)
@@ -67,37 +78,38 @@ def connectToNetwork():
         if wlan.status() < 0 or wlan.status() >= 3:
             break
         maxWait -= 1
-        print("esperando conexion...")
+        print("Esperando conexion...")
         time.sleep(1)
         
     if wlan.status() != 3:
-        raise RuntimeError("error de conexion")
+        raise RuntimeError("Error de conexion")
     else:
-        print('connected')
+        print('Conectado')
         status = wlan.ifconfig()
+        led.on()
         print('ip = '+status[0])
 
-async def handleRequest(reader, writer):
+async def handle_request(reader, writer):
     requestLine = (await reader.readline()).decode('utf8')
-    print("Request: ", requestLine)
+    print("Request: ", requestLine.strip())
     
     while await reader.readline() != b"\r\n":
         pass
     request = str(requestLine).split()
     if request[1] in sites:
         function = sites[request[1]]
-        print(function)
+        print(function.__name__ + "\n")
         function(reader, writer)
     else:
-        invalidSite(reader, writer)
+        invalid_site(reader, writer)
     await writer.drain()
     await writer.wait_closed()
     
 async def main():
     print("Conectando a la red...")
-    connectToNetwork()
-    print("iniciando servidor...")
-    asyncio.create_task(asyncio.start_server(handleRequest, "0.0.0.0", 80))
+    connect_to_network()
+    print("Iniciando servidor...")
+    asyncio.create_task(asyncio.start_server(handle_request, "0.0.0.0", 80))
     print("Esperando usuarios\n")
     while True:
         await asyncio.sleep(0.25)

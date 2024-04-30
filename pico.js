@@ -1,5 +1,5 @@
 $(function(){
-    
+    console.log( "ready!" );
     $("<body>").html(`
 <center><b>
     <form action="./forward">

@@ -1,0 +1,17 @@
+body {
+    background: url("https://raw.githubusercontent.com/akevalion/picorobot/master/bg.png") repeat fixed;
+}
+
+input {
+    border-radius: 15px;
+    height: 120px;
+    width: 120px;
+}
+
+.grabar {
+    float: left;
+}
+
+.pararGrabacion {
+    float: right;
+}

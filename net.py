@@ -1,88 +1,124 @@
 import network
 import socket
 import time
-
-from machine import Pin
-import uasyncio as asyncio
-
-from machine import ADC
 import uos
+import micropython
+import framebuf
+import random
+
+import uasyncio as asyncio
+from base import Robot
+from machine import Pin, I2C, ADC
+from sh1106 import SH1106_I2C
 
 led = Pin("LED", Pin.OUT)
 led.off()
+i2c = I2C(1, scl = Pin( 19), sda= Pin(18))
+print(i2c.scan())
+oled = SH1106_I2C(128, 64, i2c)
+oled.rotate(True)
 
-#ssid = 'Freebox-46C865'
-#password = 'eruatis!5-cogitur@-stimula4-calleantur.7'
 #ssid = 'mi 9t akevalion'
 #password = 'spigit123'
 ssid = 'MiFibra-D3C0'
 password = 'bjoV2iAp'
 
-html ="""
-<!DOCTYPE html>
-<html>
-    <head>
-        <title>Wally Robot Control</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body{
-                background: url(./bg.png) repeat fixed;
-            }
-            input{
-                border-radius: 15px;
-                height: 120px;
-                width: 120px;
-            }
-            .grabar{
-                float: left;
-            }
-            .pararGrabacion{
-                float: right;
-            }
-        </style>
-    </head>
-    <body>
-    <center><b>
-        <form action="./forward">
-        <input type="submit" value="Adelante"/>
-        </form>
-    <table><tr>
-        <td><form action="./left">
-        <input type="submit" value="Izquierda"/>
-        </form></td>
-        <td><form action="./stop">
-        <input type="submit" value="Parar"/>
-        </form></td>
-        <td><form action="./right">
-        <input type="submit" value="Derecha"/>
-        </form></td>
-    </tr></table>
-    <form action="./back">
-    <input type="submit" value="Back"/>
-    </form>
-    </center>
-
-    <form action="./grabar">
-    <input type="submit" value="Grabar" class="grabar"/>
-    </form>
-
-    <form action="./pararGrabacion">
-    <input type="submit" value="Parar Grabacion" class="pararGrabacion"/>
-    </form>
-    </body>
-</html>
-"""
-
 wlan = network.WLAN(network.STA_IF)
 adc = machine.ADC(4)
+perrito = None
+robot = Robot()
+ip = None
 
-def ok(writer):
-    writer.write("HTTP/1.0 200 OK\r\n\Content-type: text/html\r\n\r\n")
+class Dog:
+    def __init__(self):
+        self.show()
+    def right(self):
+        r.right()
+    def left(self):
+        r.left()
+    def forward(self):
+        r.forward()
+    def backward(self):
+        r.backward()
+    def stop(self):
+        r.stop()
+    def tick(self):
+        pass
+
+class DogInfo(Dog):  
+    def show(self):
+        oled.fill(0)
+        oled.text('TuercasBot',25,0,1)
+        oled.text('IP:'+ip, 0,20,1)
+        oled.show()
+        
+class DogFace(Dog):
+    def show(self):
+        self.reset()
+        self.draw_face()
+    def reset(self):
+        self.is_blinking = False
+        self.blinking_step=0
+        self.inc = None
+        self.left_eye=[22,16,32,22]
+        self.right_eye=[74,16,32,22]
+        
+    def do_blinking(self):
+        self.blinking_step += self.inc
+        if self.inc > 0 and self.blinking_step > 12:
+            self.inc = -4
+        if self.blinking_step == 0:
+            self.inc = None
+            self.is_blinking = False
+        
+        self.set_eye(self.left_eye,[22,16,32,22])
+        self.set_eye(self.right_eye,[74,16,32,22])
+        self.draw_face()
+    def set_eye(self, eye, base):
+        s = self.blinking_step
+        eye[1]=base[1]+s
+        eye[3]=base[3]-s
+        
+    def tick(self):
+        if self.is_blinking:
+            self.do_blinking()
+        else:
+            n = random.random()
+            if n <= 0.05:
+                self.is_blinking=True
+                self.inc = 4
+                self.do_blinking()
+        
+    def draw_face(self):
+        l = self.left_eye
+        r = self.right_eye
+        oled.fill(0)
+        oled.fill_rect(l[0],l[1], l[2],l[3],1)
+        oled.fill_rect(r[0],r[1], r[2],r[3],1)
+        oled.show()
+        
+        
+    
+    
+def ok(writer, text):
+    writer.write("HTTP/1.0 200 OK\r\n\Content-type: text/{}\r\n\r\n".format(text))
+
+def open_file(writer, name):
+    f = open(name)
+    writer.write(f.read())
+    f.close()
     
 def default_site(reader, writer):
-    ok(writer)
-    writer.write(html)
+    ok(writer, 'html')
+    open_file(writer, 'main.html')
+
+def pico_js(reader, writer):
+    ok(writer, 'javascript')
+    open_file(writer, 'pico.js')
     
+def pico_css(reader, writer):
+    ok(writer, 'css')
+    open_file(writer, 'pico.css')
 
 def temperature_site(reader, writer):
     ADC_voltage = adc.read_u16() * (3.3 / (65536))
@@ -99,7 +135,7 @@ def invalid_site(reader, writer):
     <body>
 </html>
 """
-    writer.write("HTTP/1.0 404 OK\r\n\Content-type: text/html\r\n\r\n")
+    writer.write("HTTP/1.0 404 NOT_FOUND\r\n\Content-type: text/html\r\n\r\n")
     writer.write(response)
 
 def disk_size_site(reader, writer):
@@ -107,10 +143,42 @@ def disk_size_site(reader, writer):
     total = res[2] * 4096/1024
     free = res[3] * 4096/1024
     used = total - free
-    writer.write("Total size: {}kb\r\nFree space: {}kb\r\nUsed space: {}kb".format(total, free, used))
+    writer.write("Total size: {}kb\r\nFree space: {}kb\r\nUsed space: {}kb\r\n{}".format(total, free, used, micropython.mem_info()))
+
+def robot_left(reader, writer):
+    perrito.left()
+
+def robot_right(reader, writer):
+    perrito.right()
     
+def robot_forward(reader, writer):
+    perrito.forward()
+    
+def robot_backward(reader, writer):
+    perrito.backward()
+
+def robot_stop(reader, writer):
+    perrito.stop()
+    
+    
+def robot_info(reader, writer):
+    global perrito
+    perrito = DogInfo()
+
+def robot_face(reader, writer):
+    global perrito
+    perrito = DogFace()
 
 sites = {
+    '/left': robot_left,
+    '/right': robot_right,
+    '/showFace': robot_face,
+    '/showInfo': robot_info,
+    '/forward': robot_forward,
+    '/backward': robot_backward,
+    '/stop': robot_stop,
+    '/pico.js': pico_js,
+    '/pico.css': pico_css,
     '/disksize': disk_size_site,
     '/': default_site,
     '/temp': temperature_site}
@@ -125,16 +193,29 @@ def connect_to_network():
         if wlan.status() < 0 or wlan.status() >= 3:
             break
         maxWait -= 1
+        oled.text('Esperando...',0,0,1)
+        oled.show()
         print("Esperando conexion...")
         time.sleep(1)
+        oled.fill(0)
+        oled.show()
+        time.sleep(0.5)
+        
         
     if wlan.status() != 3:
+        oled.fill(0)
+        oled.text('Error de conexion',0,0,1)
+        oled.show()
         raise RuntimeError("Error de conexion")
     else:
         print('Conectado')
         status = wlan.ifconfig()
         led.on()
-        print('ip = '+status[0])
+        global ip
+        global perrito
+        ip = status[0]
+        print('ip = '+ip)
+        perrito = DogInfo()
 
 async def handle_request(reader, writer):
     requestLine = (await reader.readline()).decode('utf8')
@@ -160,7 +241,8 @@ async def main():
     print("Esperando usuarios\n")
     while True:
         await asyncio.sleep(0.25)
-        time.sleep(0.5)
+        perrito.tick()
+        time.sleep(0.1)
     
 try:
     asyncio.run(main())
